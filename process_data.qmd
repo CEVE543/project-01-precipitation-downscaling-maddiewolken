@@ -1,0 +1,184 @@
+```{julia}
+#| output: false
+using Dates
+using MultivariateStats
+using Plots
+using NCDatasets
+using StatsBase
+using Unitful
+```
+
+# Data
+```{julia}
+precip_ds = NCDataset("data/precip_tx.nc")
+precip_time = precip_ds["time"][:]
+precip_lon = precip_ds["lon"][:]
+precip_lat = precip_ds["lat"][:]
+precip = precip_ds["precip"][:, :, :]
+
+display(precip_ds[:precip]) # learn about variable
+close(precip_ds)
+```
+
+```{julia}
+#| output: false
+include("get_data.jl")
+```
+
+```{julia}
+data_dict = open_mfdataset(["data/raw/2m_temperature_2000.nc", "data/raw/2m_temperature_2001.nc", "data/raw/2m_temperature_2002.nc", "data/raw/2m_temperature_2003.nc", "data/raw/2m_temperature_2004.nc", "data/raw/2m_temperature_2005.nc", "data/raw/2m_temperature_2006.nc"], "t2m");
+```
+
+```julia
+function run_demo()
+
+    # {the path to the raw data folder
+    data_dir = joinpath(HOMEDIR, "data", "raw")
+
+    years = 2000:2006 # example time range- changed to 2000 to 2020 to have more data to work with
+    for year in years
+
+        # Download 2m air temperature for the year 2020
+        download_single_level_data.(
+            year, joinpath(data_dir, "2m_temperature_$year.nc"), "2m_temperature"
+        )
+
+        # Download 500 hPa geopotential for the year 2020
+        level = 500
+        download_pressure_level_data.(
+            year,
+            joinpath(data_dir, "$(level)hPa_geopotential_$year.nc"),
+            "geopotential",
+            level,
+        )
+    end
+
+# read in all the 2m temperature data
+    fnames = shuffle(glob("2m_temperature", data_dir)) # shuffle -- should work even if out of order
+    t2m = open_mfdataset(fnames, "t2m") # we sort based on time, so we don't need to sort here
+
+    # read in all the 500 hPa geopotential data
+    fnames = shuffle(glob("500hPa_geopotential", data_dir))
+    z500 = open_mfdataset(fnames, "z")
+
+    display(t2m)
+    display(z500)
+     
+     return nothing
+end
+
+run_demo()
+```
+
+
+```{julia}
+#Display first 5 rows of data_dict to view the new dataframe
+first(data_dict, 5)
+```
+    
+```{julia}
+#Display last 5 rows of time in data_dict to check to make sure all the files were combined
+last(data_dict["time"], 5)
+```
+
+```{julia}
+#Make sure temp was read in correctly into 3D array
+println(length(data_dict["t2m"]))
+```
+
+```julia
+dataTemp = reshape(data_dict[:"t2m"],13, 13,length(data_dict[:"time"]))
+```
+```{julia}
+# Get the sizes of each dimension
+time_size, latitude_size, longitude_size = size(data_dict["time"]), size(data_dict["latitude"]), size(data_dict["longitude"])
+# Reshape "t2m" into a 3D array
+reshaped_t2m = reshape(data_dict["t2m"], time_size, latitude_size, longitude_size)
+```
+
+```{julia}
+reshaped_t2m = reshape(data_dict["t2m"], ("time", "latitude", "longitude"))
+```
+
+```{julia}
+#Rename data_dict to temp_ds
+temp_ds = data_dict
+temp_time = temp_ds["time"][:]
+temp_lon = temp_ds["longitude"][:]
+temp_lat = temp_ds["latitude"][:]
+temp = temp_ds["t2m"][:, :, :]
+
+display(temp_ds["t2m"])
+```
+
+```{julia}
+#Check if latitude needs to be reversed
+temp_lat
+#Handle the fact that the latitudes are reversed
+temp = reverse(temp; dims=2)
+```
+
+```{julia}
+#I want to subset the temp_ds data to only include Texas-ish region of precip_ds
+#Check the range of the latitudes and longitudes for the precip_ds
+min_precip_lat = minimum(precip_lat)
+max_precip_lat = maximum(precip_lat)
+min_precip_lon = minimum(precip_lon)
+max_precip_lon = maximum(precip_lon)
+
+println("Minimum Latitude: $min_precip_lat, Maximum Latitude: $max_precip_lat")
+println("Minimum Longitude: $min_precip_lon, Maximum Longitude: $max_precip_lon")
+```
+
+```julia
+# Define the desired minimum and maximum latitudes and longitudes
+min_temp_lat = 25.25
+max_temp_lat = 36.75
+min_temp_lon = 258.25
+max_temp_lon = 269.75
+
+# Access latitude and longitude variables
+lat = temp_ds["latitude"][:]
+lon = temp_ds["longitude"][:]
+
+# Create logical indices for latitude and longitude ranges
+lat_indices = findall(min_temp_lat .<= lat .<= max_temp_lat)
+lon_indices = findall(min_temp_lon .<= lon .<= max_temp_lon)
+
+# Apply logical indexing to temperature and time variables
+subset_temp = temp_ds["t2m"][:, lat_indices, lon_indices]
+subset_lat = lat[lat_indices]
+subset_lon = lon[lon_indices]
+subset_time = temp_ds["time"][:]
+```
+
+```{julia}
+heatmap(
+    temp_lon,
+    temp_lat,
+    temp[:, :, 1]';
+    xlabel="Longitude",
+    ylabel="Latitude",
+    title="Temperature on $(temp_time[1])"
+)
+```
+
+```{julia}
+#Need to process the precip data further
+#Need to handle the fact that the latitudes are reversed
+precip_lat = reverse(precip_lat)
+precip = reverse(precip; dims=2)
+```
+
+```julia
+#Run a quick plot to make sure everything is working well
+heatmap(
+    precip_lon,
+    precip_lat,
+    precip[:, :, 1]';
+    xlabel="Longitude",
+    ylabel="Latitude",
+    title="Precipitation on $(precip_time[1])"
+)
+```
+
