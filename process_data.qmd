@@ -11,7 +11,8 @@ Module: "2"
 categories:
     - "Module 2"
     - "Project"
-
+execute:
+    echo: false
 format:
     html: 
         toc-depth: 3
@@ -22,7 +23,7 @@ format:
 ---
 
 # Executive Summary:
-The goal of this project was to downscale precipitation data from a coarse resolution to a finer resolution. I aimed to use temperature data from the ERA5 dataset from 2000-2006 and precipitation data from the precip_tx dataset to predict precipitation over Texas. I planned to use a combination of Principal Component Analysis (PCA) and K-Nearest Neighbors (KNN) to downscale the data. I attempted to compare the results of the PCA/KNN method to a linear regression method because, but I was having trouble with the code, so I was not able to output any results. However, I included the code I would use for these steps. Therefore, the later sections of code are not going to run due to the errors, but are what I planned to implement.
+The goal of this project was to downscale precipitation data from a coarse resolution to a finer resolution. I aimed to use temperature data from the ERA5 dataset from 2000-2006 and precipitation data from the precip_tx dataset to predict precipitation over Texas. I planned to use a combination of Principal Component Analysis (PCA) and K-Nearest Neighbors (KNN) to downscale the data. I attempted to compare the results of the PCA/KNN method to a linear regression method, but I was having trouble with the code, so I was not able to output any results. However, I included the code I would use for these steps. Therefore, the later sections of code are not going to run due to the errors, but are what I planned to implement.
 
 # Setup
 ```{julia}
@@ -234,7 +235,7 @@ heatmap(
 time = Dates.Date.(temp_time)
 ```
 
-# Split the data
+## Split the data
 ```julia
 #We will use the last year of data as the testing set, and the rest as the training set. We first need to split the indices
 idx_partition = findfirst(time .== time[end] - Dates.Year(5))
@@ -247,7 +248,7 @@ temp_train = filtered_temp[:, :, train_idx]
 temp_test = filtered_temp[:, :, test_idx]
 ```
 
-# Preprocess
+## Preprocess
 ```julia
 #To start preprocessing the data, we can first calculate climatology to take into accoutn seasonal differences. We can use a time mean from lab 6 so that summers will be generally positive anomalies and winters will be generally cooler anomalies.
 # The preprocess function from lab 6 requires passing in a “reference” temperature dataset, which we’ll take as the temperature over which the “climatology” is defined. It also converts to scalar using Kelvin as the unit.
@@ -540,7 +541,7 @@ end
 #Can check this plot to see if there is a pattern amongst the residuals we need to take into account or note
 ```
 
-## MSE differences between methods
+# MSE differences between methods
 ```julia
 #We want to compare the MSE between the PCA/KNN method and the linear regression method
 #Note: most of this code is form ChatGPT
@@ -571,22 +572,23 @@ end
 difference_in_mse = predict_knn_linear(temp_train, temp_test[:, :, t_sample], precip_train; n_pca=3)
 println("Difference in MSE between PCA/KNN and Linear Regression: ", difference_in_mse)
 ```
+# Written report
 
-# Exploratory data analysis
+## Exploratory data analysis
 The initial heatmap shows the temperature across the United States during the first hour of January 1, 2000. The temperatures look pretty much as expected. The more southern areas of the US were warmer and the more northern regions were cooler. There are even regions of the US that are cooler than surroudning areas and likely reflect mountain ranges.
 
 The second heatmap shows the precipitation across a Texas-ish area during the first hour of January 1, 1979. The areas near the gulf had higher levels of precipitation. The areas further out from the gulf were generally drier at this time.
 
 The other heatmaps I attempted to create had errors.
 
-# Methods
+## Methods
 My general method for this project was to use PCA and K-NN to downscale precipitation over Texas. I began by loading in the data for both the ERA5 temperature datasets and the precip_tx dataset. I reversed latitudes and corresponding tempertures or precipitation values when needed. I used heatmaps to check the data along the way. I attempted to make the latitude, longitude, and time vectors match the temp vector, but had trouble with getting the latitude and longitude to match temp in a way that continued to work during the subsetting step. When I tried to subset the data to only include the Texas region used in the precip_tx dataset, I ran into issues that I was not able to fix. I continued to try and work through the project without being able to run the code. I separated the data into training and testing sets based on the year. I followed a lot of the techniques used in lab 6 to use implement PCA and K-NN. I  attempted to use linear regression and compare the results to the PCA/KNN method. I also tried to compare methods using eman squared errors.
 
-# Model comparison
+## Model comparison
 While I could not output the models or calculate the MSE, there are still advantages and limitations to the models. One limitation is that I only used temperature to predict precipitation in this project. There are many pieces to accurately predicitng precipitation, so neither of these models would be able to predict precipitation extremely well. However, the PCA/KNN method would likely be more accurate than the linear regression method because it takes into account the seasonal and spatial differences in precipitation. Though, more predictors can easily be added to linear regression to make it more accurate in predicitng precipitation.
 
-# Conclusion
+## Conclusion
 Overall, the task of downscaling precipitation was difficult for me, but is a very helpful technique in environmental engineering. Using PCA/KNN is one way to downscale precipitaton and liner regression is another. These two methods can be compared by comparing MSE. There are limitations and advantages to both methods that need to be taken into account when downscaling precipitation.
 
-# Teamwork
+## Teamwork
 I used ChatGPT and GitHub Copilot for some of this code, but I did edit each code to better fit the needs of this project. I discussed general ideas and troubleshooting techniques with classmates.
