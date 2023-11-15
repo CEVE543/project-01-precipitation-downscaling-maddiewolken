@@ -1,3 +1,30 @@
+---
+title: "Project 1: Precipitation Downscaling"
+jupyter: julia-1.9
+date: 2023-11-15
+author: "Madeline Wolken (mgw6)"
+number-sections: true
+code-annotations: hover
+
+kind: "Project"
+Module: "2"
+categories:
+    - "Module 2"
+    - "Project"
+
+format:
+    html: 
+        toc-depth: 3
+    docx: 
+        toc: true
+        toc-depth: 3
+        fig-format: png
+---
+
+# Executive Summary:
+The goal of this project was to downscale precipitation data from a coarse resolution to a finer resolution. I aimed to use temperature data from the ERA5 dataset from 2000-2006 and precipitation data from the precip_tx dataset to predict precipitation over Texas. I planned to use a combination of Principal Component Analysis (PCA) and K-Nearest Neighbors (KNN) to downscale the data. I attempted to compare the results of the PCA/KNN method to a linear regression method because, but I was having trouble with the code, so I was not able to output any results. However, I included the code I would use for these steps. Therefore, the later sections of code are not going to run due to the errors, but are what I planned to implement.
+
+# Setup
 ```{julia}
 #| output: false
 using Dates
@@ -26,6 +53,7 @@ include("get_data.jl")
 ```
 
 ```{julia}
+#Pull the datasets into data_dict
 data_dict = open_mfdataset(["data/raw/2m_temperature_2000.nc", "data/raw/2m_temperature_2001.nc", "data/raw/2m_temperature_2002.nc", "data/raw/2m_temperature_2003.nc", "data/raw/2m_temperature_2004.nc", "data/raw/2m_temperature_2005.nc", "data/raw/2m_temperature_2006.nc"], "t2m");
 ```
 
@@ -33,14 +61,14 @@ data_dict = open_mfdataset(["data/raw/2m_temperature_2000.nc", "data/raw/2m_temp
 #Display first 5 rows of data_dict to view the new dataframe
 first(data_dict, 5)
 ```
-    
+
 ```{julia}
 #Display last 5 rows of time in data_dict to check to make sure all the files were combined
 last(data_dict["time"], 5)
 ```
 
 ```{julia}
-#Make sure temp was read in correctly into 3D array
+#Make sure temperature looks right
 println(length(data_dict["t2m"]))
 ```
 
@@ -70,8 +98,8 @@ temp = reverse(temp; dims=2)
 ```{julia}
 #Run a quick plot to make sure everything is working well
 heatmap(
-    temp_lon[1:66],  # Adjusted temporarily to match the size of the data
-    temp_lat[1:27],  #Adjusted temporarily to match the size of the data
+    temp_lon[1:66], #Adjusted the number of observations to view the heatmap. Otherwise, the vector sizes are different, so the heatmap wont work. Trying to fix this problem below.
+    temp_lat[1:27],  
     temp[:, :, 1]';
     xlabel="Longitude",
     ylabel="Latitude",
@@ -80,24 +108,8 @@ heatmap(
 ```
 
 ```{julia}
-#Change longitude format from lon3 ot lon1
-precip_lon .=mod.((precip_lon .+180),360) .-180
-```
-
-```{julia}
-#I want to subset the temp_ds data to only include Texas-ish region of precip_ds
-#Check the range of the latitudes and longitudes for the precip_ds
-min_precip_lat = minimum(precip_lat)
-max_precip_lat = maximum(precip_lat)
-min_precip_lon = minimum(precip_lon)
-max_precip_lon = maximum(precip_lon)
-
-println("Minimum Latitude: $min_precip_lat, Maximum Latitude: $max_precip_lat")
-println("Minimum Longitude: $min_precip_lon, Maximum Longitude: $max_precip_lon")
-```
-
-```{julia}
 # Find unique latitudes and longitudes with at least one associated non-zero temperature observation (basically this is getting the latitude and longitude lengths to match the latitude and longitudes in temp)
+#Note: Code from ChatGPT
 unique_latitudes = Set()
 unique_longitudes = Set()
 
@@ -115,24 +127,52 @@ filt_lat = collect(unique_latitudes)
 filt_lon = collect(unique_longitudes)
 ```
 
-```julia
-temp_lat2 = temp_lat[1:66]
-temp_lon2 = temp_lon[1:27]
+ ```julia
+# This code is from ChatGPT. I wanted  to use this to sort the latitudes and longitudes in ascending order so the heatmap will work, but I can't figure out how to also sort their corresponding times and temperatures. This was my attempt to do so, but it does not work.
+# Sort indices for lon, lat, and time
+sort_indices_lon = sortperm(filt_lon)
+sort_indices_lat = sortperm(filt_lat)
 
-# Now, you can check the sizes
-println(size(temp_lat2))
-println(size(temp_lon2))
+# Sort arrays accordingly
+sorted_lon = filt_lon[sort_indices_lon]
+sorted_lat = filt_lat[sort_indices_lat]
+sorted_temp = temp[sort_indices_lat, sort_indices_lon]
+sorted_time = temp_time[sort_indices_lon]
 ```
 
+```julia
+#Run a quick plot to make sure everything is working well
+#This heatmap is not working because the latitudes and longitudes are not in ascending order. I tried to fix this problem in several ways (including the steps above), but I cannot figure out an appropriate way to sort them.
+heatmap(
+    filt_lon,
+    filt_lat,  
+    temp[:, :, 1]';
+    xlabel="Longitude",
+    ylabel="Latitude",
+    title="Temperature on $(temp_time[1])"
+)
+```
 
 ```{julia}
-# Substitute temp_lat and temp_lon for filtered
-temp_ds["latitude"] = filt_lat
-temp_ds["longitude"] = filt_lon
+#Change longitude format from lon3 to lon1
+precip_lon .=mod.((precip_lon .+180),360) .-180
+```
+
+```{julia}
+#I want to subset the temp_ds data to only include Texas-ish region of precip_ds
+#Check the range of the latitudes and longitudes for the precip_ds
+min_precip_lat = minimum(precip_lat)
+max_precip_lat = maximum(precip_lat)
+min_precip_lon = minimum(precip_lon)
+max_precip_lon = maximum(precip_lon)
+
+println("Minimum Latitude: $min_precip_lat, Maximum Latitude: $max_precip_lat")
+println("Minimum Longitude: $min_precip_lon, Maximum Longitude: $max_precip_lon")
 ```
 
 ```{julia}
 # Define the latitude and longitude ranges
+# These numbers for min and max come from above where I found the min and max lon and lat of the precip data, which is roughly over Texas.
 min_temp_lat = 25.25
 max_temp_lat = 36.75
 min_temp_lon = -101.75
@@ -142,7 +182,7 @@ max_temp_lon = -90.25
 lat_indices = (filt_lat .>= min_temp_lat) .& (filt_lat .<= max_temp_lat)
 lon_indices = (filt_lon .>= min_temp_lon) .& (filt_lon .<= max_temp_lon)
 
-# Use logical indexing to subset the data
+# Use logical indexing to subset the data over Texas
 filtered_filt_lat = filt_lat[lat_indices]
 filtered_filt_lon = filt_lon[lon_indices]
 filtered_temp = temp[lat_indices, lon_indices, :]
@@ -150,38 +190,12 @@ filtered_time = time  # Assuming time is not subject to filtering
 ```
 
 ```julia
-
-# Define the latitude and longitude ranges
-min_temp_lat = 25.25
-max_temp_lat = 36.75
-min_temp_lon = -101.75
-max_temp_lon = -90.25
-
-# Find the indices for latitude and longitude ranges
-lat_indices = findall(min_temp_lat .<= temp_ds["latitude"] .<= max_temp_lat)
-lon_indices = findall(min_temp_lon .<= temp_ds["longitude"] .<= max_temp_lon)
-
-# Apply the indices to subset the dictionary to just the Texas-ish region
-tx_temp_ds = Dict(
-    "latitude" => temp_ds["latitude"][lat_indices],
-    "longitude" => temp_ds["longitude"][lon_indices],
-    "time" => temp_ds["time"],
-    "t2m" => temp_ds["t2m"][lat_indices, lon_indices, :]
-)
-
-tx_temp_lat = temp_ds["latitude"][lat_indices]
-tx_temp_lon = temp_ds["longitude"][lon_indices]
-tx_temp_time = temp_ds["time"]
-tx_temp_data = temp_ds["t2m"][lat_indices, lon_indices, :]
-```
-
-
-```{julia}
 #Run a quick plot to make sure everything is working well
+# This heatmap is supposed to show the temperature over Texas (approximately), but since the filtered lon variable is 0, it won't work. I've been trying t retrace my steps to find where it turned to 0, but I'm not sure.
 heatmap(
-    tx_temp_lon,  # Adjusted temporarily to match the size of the data
-    tx_temp_lat,  #Adjusted temporarily to match the size of the data
-    tx_temp_data[:, :, 1]';
+    filtered_filt_lon,
+    filtered_filt_lat,
+    filtered_temp[:, :, 1]';
     xlabel="Longitude",
     ylabel="Latitude",
     title="Temperature on $(temp_time[1])"
@@ -196,8 +210,8 @@ precip_lat = reverse(precip_lat)
 precip = reverse(precip; dims=2)
 ```
 
-```julia
-#Run a quick plot to make sure everything is working well
+```{julia}
+#Run a quick plot on precip data to make sure everything is working well
 heatmap(
     precip_lon,
     precip_lat,
@@ -208,3 +222,371 @@ heatmap(
 )
 ```
 
+## From this point on, the code is not going to work becasue of the errors above I am havign a difficult time fixing. Therefore, the follwoing code is what I would do for each step, but I cannot run it.
+
+```julia
+#Make sure the times are the same for both datasets
+@assert filtered_time == precip_time
+```
+
+```julia
+#Change the format of the time to dates. Since the times are the same based on the step above, the time variable can be used for both datasets.
+time = Dates.Date.(temp_time)
+```
+
+# Split the data
+```julia
+#We will use the last year of data as the testing set, and the rest as the training set. We first need to split the indices
+idx_partition = findfirst(time .== time[end] - Dates.Year(5))
+train_idx = 1:idx_partition
+test_idx = (idx_partition+1):length(time)
+
+precip_train = precip[:, :, train_idx]
+precip_test = precip[:, :, test_idx]
+temp_train = filtered_temp[:, :, train_idx]
+temp_test = filtered_temp[:, :, test_idx]
+```
+
+# Preprocess
+```julia
+#To start preprocessing the data, we can first calculate climatology to take into accoutn seasonal differences. We can use a time mean from lab 6 so that summers will be generally positive anomalies and winters will be generally cooler anomalies.
+# The preprocess function from lab 6 requires passing in a “reference” temperature dataset, which we’ll take as the temperature over which the “climatology” is defined. It also converts to scalar using Kelvin as the unit.
+function preprocess(filtered_temp::Array{T,3}, temp_ref::Array{T,3})::AbstractMatrix where {T}
+    n_lon, n_lat, n_t = size(filtered_temp)
+    climatology = mean(temp_ref; dims=3)
+    temp_anom = filtered_temp .- climatology
+
+    # reshape to 2D
+    temp_anom = reshape(temp_anom, n_lon * n_lat, n_t)
+
+    # strip the units
+    return ustrip.(u"K", temp_anom)
+end
+preprocess (generic function with 1 method)
+```
+
+```julia
+# We can use the training data to define the climatology and then use the same climatology for both the training and the testing data
+|# output: false
+n_lon, n_lat, n_t = size(filtered_temp)
+temp_mat_train = preprocess(temp_train, temp_train)
+temp_mat_test = preprocess(temp_test, temp_train)
+```
+
+# Principal Component Analysis
+## Fitting
+```julia
+#We can start with a large number of principal components for now and change the number later
+pca_model = fit(PCA, temp_mat_train; maxoutdim=25, pratio=0.999);
+```
+
+```julia
+#Plot total variances explained
+#Variance explained by each PC plot
+p1 = plot(
+    principalvars(pca_model) / var(pca_model);
+    xlabel="# of PCs",
+    ylabel="Fraction of Variance Explained",
+    label=false,
+    title="Variance Explained"
+)
+#Cumulative variance explained plot
+p2 = plot(
+    cumsum(principalvars(pca_model)) / var(pca_model);
+    xlabel="# of PCs",
+    ylabel="Fraction of Variance Explained",
+    label=false,
+    title="Cumulative Variance Explained Plot"
+)
+plot(p1, p2; layout=(1, 2), size=(800, 400))
+```
+
+```julia
+#Plot the spatial patterns associated with the first two principal components
+#Plot the time series of the first two principal components
+#Make a scatter plot of the first two principal components, where each day is a day
+p = []
+for i in 1:3
+    pc = projection(pca_model)[:, i]
+    pc = reshape(pc, n_lat, n_lon)'
+    pi = heatmap(
+        filtered_filt_lon,
+        filtered-filt_lat,
+        pc;
+        xlabel="Longitude",
+        ylabel="Latitude",
+        title="PC $i",
+        aspect_ratio=:equal,
+        cmap=:PuOr
+    )
+    push!(p, pi)
+end
+plot(p...; layout=(1, 3), size=(1500, 600))
+```
+
+```julia
+#We can take a closer look at these results to see which PC is driving seasonal vs. day-to-day variability
+pc_ts = predict(pca_model, temp_mat_train)
+day_of_year = Dates.dayofyear.(time)
+p = []
+for i in 1:3
+    pi = scatter(
+        day_of_year,
+        pc_ts[i, :];
+        xlabel="Day of Year",
+        ylabel="PC $i",
+        title="PC $i",
+        label=false,
+        alpha=0.3,
+        color=:gray
+    )
+    push!(p, pi)
+end
+plot(p...; layout=(1, 3), size=(1500, 600))
+```
+
+```julia
+#We can also plot the principal components against each other, with area-averated precipitation as the color. 
+#Plot both all days and also the rainiest days (when precipitation is in the 98th percentil or higher)
+avg_precip =
+    ustrip.(
+        u"inch", [mean(skipmissing(precip_train[:, :, t])) for t in 1:size(precip_train, 3)]
+    )
+
+# If there are weird NaN values, can use this code to replace them with 0
+#avg_precip = replace(avg_precip, NaN => 0)
+
+# Plot all days
+p1 = scatter(
+    pc_ts[2, :],
+    pc_ts[3, :];
+    zcolor=avg_precip,
+    xlabel="PC 2",
+    ylabel="PC 3",
+    markersize=3,
+    clims=(0, 2.75),
+    title="All Days",
+    label=false
+)
+
+# Plot rainiest days
+p2_idx = findall(avg_precip .> quantile(avg_precip, 0.98))
+p2 = scatter(
+    pc_ts[2, p2_idx],
+    pc_ts[3, p2_idx];
+    zcolor=avg_precip[p2_idx],
+    xlabel="PC 2",
+    ylabel="PC 3",
+    markersize=5,
+    clims=(0, 2.75),
+    title="Rainy Days",
+    label=false
+)
+plot(p1, p2; size=(1000, 400), link=:both)
+```
+
+# K-NN
+```julia
+function euclidean_distance(x::AbstractVector, y::AbstractVector)::AbstractFloat
+    return sqrt(sum((x .- y) .^ 2))
+end
+
+function nsmallest(x::AbstractVector, n::Int)::Vector{Int}
+    idx = sortperm(x)
+    return idx[1:n]
+end
+
+function knn(X::AbstractMatrix, X_i::AbstractVector, K::Int)::Tuple{Int,AbstractVector}
+    # calculate the distances between X_i and each row of X
+    dist = [euclidean_distance(X_i, X[j, :]) for j in 1:size(X, 1)]
+    idx = nsmallest(dist, K)
+    w = 1 ./ dist[idx]
+    w ./= sum(w)
+    idx_sample = sample(idx, Weights(w))
+    return (idx_sample, vec(X[idx_sample, :]))
+end
+knn (generic function with 1 method)
+```
+
+```julia
+#We can validate this by simulating using our known values
+let
+    X = collect([-1 0 1 2 3 4 5 6 7 8 9 10]')
+    X_i = [5.4]
+    K = 3
+    samples = []
+    for i in 1:1000
+        idx, X_sample = knn(X, X_i, K)
+        push!(samples, X_sample[1])
+    end
+    histogram(samples; bins=vec(X) .+ 0.5, label="Samples", normalize=:pdf, xticks=vec(X))
+
+    dist = [0.4, 0.6, 1.4]
+    w = 1 ./ dist
+    w ./= sum(w)
+    scatter!([5, 6, 4], w; label="Analytical", markersize=7)
+end
+```
+
+# Combining
+```julia
+#We can now combine the PCA and KNN functions to make predictions
+function predict_knn(temp_train, temp_test, precip_train; n_pca::Int)
+    X_train = preprocess(temp_train, temp_train)
+    X_test = preprocess(temp_test, temp_train)
+
+    # fit the PCA model to the training data
+    pca_model = fit(PCA, X_train; maxoutdim=n_pca)
+
+    # project the test data onto the PCA basis
+    train_embedded = predict(pca_model, X_train)
+    test_embedded = predict(pca_model, X_test)
+
+    # use the `knn` function for each point in the test data
+    precip_pred = map(1:size(X_test, 2)) do i
+        idx, _ = knn(train_embedded', test_embedded[:, i], 3)
+        precip_train[:, :, idx]
+    end
+
+    # return a matrix of predictions
+    return precip_pred
+end
+predict_knn
+
+#Run this function on several days of data and plot the results
+t_sample = rand(1:size(temp_test, 3), 3)
+precip_pred = predict_knn(temp_train, temp_test[:, :, t_sample], precip_train; n_pca=3)
+
+p = map(eachindex(t_sample)) do ti
+    t = t_sample[ti]
+    y_pred = precip_pred[ti]'
+    y_actual = precip_test[:, :, t]'
+    cmax = max(maximum(skipmissing(y_pred)), maximum(skipmissing(y_actual)))
+    cmax = ustrip(u"mm", cmax)
+
+    p1 = heatmap(
+        precip_lon,
+        precip_lat,
+        y_pred;
+        xlabel="Longitude",
+        ylabel="Latitude",
+        title="Predicted",
+        aspect_ratio=:equal,
+        clims=(0, cmax)
+    )
+    p2 = heatmap(
+        precip_lon,
+        precip_lat,
+        y_actual;
+        xlabel="Longitude",
+        ylabel="Latitude",
+        title="Actual",
+        aspect_ratio=:equal,
+        clims=(0, cmax)
+    )
+    plot(p1, p2; layout=(2, 1), size=(1000, 400))
+end
+plot(p...; layout=(2, 3), size=(1500, 1200))
+```
+
+# Linear Regression
+```julia
+# Note: most of this code is from ChatGPT.
+using GLM
+function predict_knn_linear(temp_train, temp_test, precip_train; n_pca::Int)
+    X_train = preprocess(temp_train, temp_train)
+    X_test = preprocess(temp_test, temp_train)
+
+    # Fit the PCA model to the training data
+    pca_model = fit(PCA, X_train; maxoutdim=n_pca)
+
+    # Project the training and test data onto the PCA basis
+    train_embedded = predict(pca_model, X_train)
+    test_embedded = predict(pca_model, X_test)
+
+    # Linear regression on the principal components
+    lm_model = lm(precip_train[:], hcat(ones(size(train_embedded, 2)), train_embedded'))
+
+    # Predict using the linear model on the test data
+    precip_pred_linear = predict(lm_model, hcat(ones(size(test_embedded, 2)), test_embedded'))
+
+    # Reshape the predictions to match the original shape
+    precip_pred_linear = reshape(precip_pred_linear, size(precip_train))
+
+    return precip_pred_linear
+end
+
+# Example of usage
+precip_pred_linear = predict_knn_linear(temp_train, temp_test[:, :, t_sample], precip_train; n_pca=3)
+```
+
+```julia
+#Checking the residuals of the linear regression
+function predict_knn_linear(temp_train, temp_test, precip_train; n_pca::Int)
+    # ... (previous code)
+
+    # Fit the linear regression model
+    lm_model = lm(precip_train[:], hcat(ones(size(train_embedded, 2)), train_embedded'))
+
+    # Obtain the residuals
+    residuals = residuals(lm_model)
+
+    # Diagnostic plots
+    p1 = scatter(predict(lm_model), residuals, xlabel="Fitted Values", ylabel="Residuals", legend=false)
+
+    display(plot(p1, size=(800, 800)))
+end
+
+#Can check this plot to see if there is a pattern amongst the residuals we need to take into account or note
+```
+
+## MSE differences between methods
+```julia
+#We want to compare the MSE between the PCA/KNN method and the linear regression method
+#Note: most of this code is form ChatGPT
+using GLM
+using Statistics
+
+function calculate_mse(y_true, y_pred)
+    return mean((y_true .- y_pred).^2)
+end
+
+function predict_knn_linear(temp_train, temp_test, precip_train; n_pca::Int)
+
+    # KNN predictions
+    precip_pred_knn = predict_knn(temp_train, temp_test, precip_train; n_pca=n_pca)
+
+    # Linear regression predictions
+    precip_pred_linear = predict_knn_linear(temp_train, temp_test, precip_train; n_pca=n_pca)
+
+    # Calculate MSE for both methods
+    mse_knn = calculate_mse(precip_test[:, :, t_sample], precip_pred_knn)
+    mse_linear = calculate_mse(precip_test[:, :, t_sample], precip_pred_linear)
+
+    # Return the difference in MSE
+    return mse_knn - mse_linear
+end
+
+# Example usage
+difference_in_mse = predict_knn_linear(temp_train, temp_test[:, :, t_sample], precip_train; n_pca=3)
+println("Difference in MSE between PCA/KNN and Linear Regression: ", difference_in_mse)
+```
+
+# Exploratory data analysis
+The initial heatmap shows the temperature across the United States during the first hour of January 1, 2000. The temperatures look pretty much as expected. The more southern areas of the US were warmer and the more northern regions were cooler. There are even regions of the US that are cooler than surroudning areas and likely reflect mountain ranges.
+
+The second heatmap shows the precipitation across a Texas-ish area during the first hour of January 1, 1979. The areas near the gulf had higher levels of precipitation. The areas further out from the gulf were generally drier at this time.
+
+The other heatmaps I attempted to create had errors.
+
+# Methods
+My general method for this project was to use PCA and K-NN to downscale precipitation over Texas. I began by loading in the data for both the ERA5 temperature datasets and the precip_tx dataset. I reversed latitudes and corresponding tempertures or precipitation values when needed. I used heatmaps to check the data along the way. I attempted to make the latitude, longitude, and time vectors match the temp vector, but had trouble with getting the latitude and longitude to match temp in a way that continued to work during the subsetting step. When I tried to subset the data to only include the Texas region used in the precip_tx dataset, I ran into issues that I was not able to fix. I continued to try and work through the project without being able to run the code. I separated the data into training and testing sets based on the year. I followed a lot of the techniques used in lab 6 to use implement PCA and K-NN. I  attempted to use linear regression and compare the results to the PCA/KNN method. I also tried to compare methods using eman squared errors.
+
+# Model comparison
+While I could not output the models or calculate the MSE, there are still advantages and limitations to the models. One limitation is that I only used temperature to predict precipitation in this project. There are many pieces to accurately predicitng precipitation, so neither of these models would be able to predict precipitation extremely well. However, the PCA/KNN method would likely be more accurate than the linear regression method because it takes into account the seasonal and spatial differences in precipitation. Though, more predictors can easily be added to linear regression to make it more accurate in predicitng precipitation.
+
+# Conclusion
+Overall, the task of downscaling precipitation was difficult for me, but is a very helpful technique in environmental engineering. Using PCA/KNN is one way to downscale precipitaton and liner regression is another. These two methods can be compared by comparing MSE. There are limitations and advantages to both methods that need to be taken into account when downscaling precipitation.
+
+# Teamwork
+I used ChatGPT and GitHub Copilot for some of this code, but I did edit each code to better fit the needs of this project. I discussed general ideas and troubleshooting techniques with classmates.
